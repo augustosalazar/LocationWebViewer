@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, type SetStateAction } from 'react';
+import dynamic from 'next/dynamic';
 import { getEmails, getLocationsByEmail, type LocationData } from '@/services/location-service';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/loading-spinner';
@@ -10,6 +11,13 @@ import { ErrorDisplay } from '@/components/error-display';
 import { DatePicker } from '@/components/date-picker';
 import { Mail, MapPin } from 'lucide-react';
 import { format, isSameDay } from 'date-fns';
+
+// Dynamically import the Map component to ensure it's only rendered on the client side
+const LocationMap = dynamic(() => import('@/components/location-map').then(mod => mod.LocationMap), {
+  ssr: false,
+  loading: () => <div className="flex justify-center items-center h-96"><LoadingSpinner size={48} /></div>,
+});
+
 
 export default function HomePage() {
   const [emails, setEmails] = useState<string[]>([]);
@@ -44,7 +52,7 @@ export default function HomePage() {
     try {
       setIsLoadingLocations(true);
       setError(null);
-      setLocations([]); 
+      setLocations([]);
       setFilteredLocations([]);
       const fetchedLocations = await getLocationsByEmail(email);
       setLocations(fetchedLocations);
@@ -60,7 +68,7 @@ export default function HomePage() {
     if (!selectedDate) {
       setFilteredLocations(locations);
     } else {
-      const newFiltered = locations.filter(location => 
+      const newFiltered = locations.filter(location =>
         isSameDay(new Date(location.timestamp), selectedDate)
       );
       setFilteredLocations(newFiltered);
@@ -72,8 +80,8 @@ export default function HomePage() {
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <Card className="md:col-span-1 shadow-xl">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <Card className="lg:col-span-1 shadow-xl h-fit">
         <CardHeader>
           <CardTitle className="flex items-center">
             <Mail className="mr-2 h-5 w-5 text-primary" />
@@ -96,45 +104,63 @@ export default function HomePage() {
         </CardContent>
       </Card>
 
-      <div className="md:col-span-2">
+      <div className="lg:col-span-2 space-y-6">
         {selectedEmail && (
-          <Card className="shadow-xl">
-            <CardHeader>
-              <div className="flex justify-between items-start sm:items-center flex-col sm:flex-row gap-2">
-                <CardTitle className="flex items-center">
-                  <MapPin className="mr-2 h-5 w-5 text-primary" />
-                  Locations for {selectedEmail}
-                </CardTitle>
-                <DatePicker date={selectedDate} setDate={handleDateChange} />
-              </div>
-              <CardDescription>
-                Showing recorded locations for the selected email
-                {selectedDate ? ` on ${format(selectedDate, 'PPP')}` : ''}.
-                {!selectedDate && locations.length > 0 && filteredLocations.length === 0 && locations.length !== 0 && ' (No locations for selected date).'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isLoadingLocations && <LoadingSpinner size={32} />}
-              {error && !isLoadingLocations && <ErrorDisplay message={error} />}
-              {!isLoadingLocations && !error && filteredLocations.length === 0 && selectedEmail && (
-                <p>
-                  {selectedDate 
-                    ? `No locations found for this email on ${format(selectedDate, 'PPP')}.` 
-                    : 'No locations found for this email.'}
-                </p>
-              )}
-              {!isLoadingLocations && filteredLocations.length > 0 && (
-                <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-                  {filteredLocations.map((location) => (
-                    <LocationCard key={location.id} location={location} />
-                  ))}
+          <>
+            <Card className="shadow-xl">
+              <CardHeader>
+                <div className="flex justify-between items-start sm:items-center flex-col sm:flex-row gap-2">
+                  <CardTitle className="flex items-center">
+                    <MapPin className="mr-2 h-5 w-5 text-primary" />
+                    Locations for {selectedEmail}
+                  </CardTitle>
+                  <DatePicker date={selectedDate} setDate={handleDateChange} />
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                <CardDescription>
+                  Showing recorded locations for the selected email
+                  {selectedDate ? ` on ${format(selectedDate, 'PPP')}` : ''}.
+                  {!selectedDate && locations.length > 0 && filteredLocations.length === 0 && locations.length !== 0 && ' (No locations for selected date).'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoadingLocations && <LoadingSpinner size={32} />}
+                {error && !isLoadingLocations && <ErrorDisplay message={error} />}
+                {!isLoadingLocations && !error && filteredLocations.length === 0 && selectedEmail && (
+                  <p>
+                    {selectedDate
+                      ? `No locations found for this email on ${format(selectedDate, 'PPP')}.`
+                      : 'No locations found for this email.'}
+                  </p>
+                )}
+                {!isLoadingLocations && filteredLocations.length > 0 && (
+                  <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-2">
+                    {filteredLocations.map((location) => (
+                      <LocationCard key={location.id} location={location} />
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            {filteredLocations.length > 0 && (
+              <Card className="shadow-xl mt-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center">
+                    <MapPin className="mr-2 h-5 w-5 text-primary" />
+                    Map View
+                  </CardTitle>
+                  <CardDescription>
+                    Visualizing locations on OpenStreetMap.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                   <LocationMap locations={filteredLocations} />
+                </CardContent>
+              </Card>
+            )}
+          </>
         )}
         {!selectedEmail && !isLoadingEmails && (
-          <Card className="shadow-xl flex flex-col items-center justify-center min-h-[200px]">
+          <Card className="shadow-xl flex flex-col items-center justify-center min-h-[200px] lg:min-h-[calc(100vh-10rem)]">
             <CardContent className="text-center">
               <MapPin size={48} className="mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground">Select an email from the list to see location data.</p>

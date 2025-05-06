@@ -1,10 +1,11 @@
+
 'use client';
 
 import type { LocationData } from '@/services/location-service';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 // Fix for default icon issue with Leaflet and Webpack
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -47,6 +48,16 @@ function RecenterAutomatically({ locations }: { locations: LocationData[] }) {
 
 
 export function LocationMap({ locations }: LocationMapProps) {
+  const [clientRender, setClientRender] = useState(false);
+
+  useEffect(() => {
+    setClientRender(true);
+  }, []);
+
+  if (!clientRender) {
+    return <div className="flex justify-center items-center h-[400px] w-full rounded-lg shadow-md bg-muted"><p>Loading map...</p></div>;
+  }
+
   if (!locations || locations.length === 0) {
     return <p className="text-muted-foreground">No locations to display on the map.</p>;
   }
@@ -54,9 +65,15 @@ export function LocationMap({ locations }: LocationMapProps) {
   // Calculate a center point for the map. If only one location, use it. Otherwise, use the first location.
   const centerLat = locations[0].latitude;
   const centerLng = locations[0].longitude;
+  
+  // Adding a key to MapContainer that changes when locations change forces a re-render of the map.
+  // This is necessary because Leaflet doesn't always react well to prop changes after initialization.
+  // Using JSON.stringify for a simple, stable key based on location IDs or a hash of coordinates.
+  const mapKey = locations.map(loc => loc.id).join(',') + `-${locations.length}`;
+
 
   return (
-    <MapContainer center={[centerLat, centerLng]} zoom={locations.length === 1 ? 13 : 5} style={{ height: '400px', width: '100%', borderRadius: '0.5rem', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+    <MapContainer key={mapKey} center={[centerLat, centerLng]} zoom={locations.length === 1 ? 13 : 5} style={{ height: '400px', width: '100%', borderRadius: '0.5rem', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -73,3 +90,5 @@ export function LocationMap({ locations }: LocationMapProps) {
     </MapContainer>
   );
 }
+
+

@@ -3,19 +3,11 @@
 
 import type { LocationData } from '@/services/location-service';
 import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
+// import L from 'leaflet'; // Removed direct import
+import type L from 'leaflet'; // Import L type for type safety
 import { useEffect, useState, useRef } from 'react';
 import { LoadingSpinner } from './loading-spinner';
 
-// Fix for default icon issue with Leaflet and Webpack
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
 
 interface LocationMapProps {
   locations: LocationData[];
@@ -25,14 +17,35 @@ export function LocationMap({ locations }: LocationMapProps) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
-  const [clientRender, setClientRender] = useState(false);
+  const [isLeafletLoaded, setIsLeafletLoaded] = useState(false);
+  const LRef = useRef<typeof L | null>(null);
+
 
   useEffect(() => {
-    setClientRender(true);
+    // Dynamically import Leaflet only on the client side
+    import('leaflet').then(leaflet => {
+      LRef.current = leaflet.default;
+      // Fix for default icon issue with Leaflet and Webpack
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      delete (LRef.current.Icon.Default.prototype as any)._getIconUrl;
+
+      LRef.current.Icon.Default.mergeOptions({
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+      });
+      setIsLeafletLoaded(true);
+    }).catch(error => {
+        console.error("Failed to load Leaflet", error);
+        // Potentially set an error state here to inform the user
+    });
   }, []);
 
   useEffect(() => {
-    if (!clientRender || !mapRef.current) return;
+    if (!isLeafletLoaded || !mapRef.current || !LRef.current) return;
+    
+    const L = LRef.current;
+
 
     // Initialize map if it hasn't been initialized yet
     if (!mapInstanceRef.current) {
@@ -88,7 +101,7 @@ export function LocationMap({ locations }: LocationMapProps) {
     map.invalidateSize();
 
 
-  }, [locations, clientRender]); // Rerun effect if locations or clientRender status changes
+  }, [locations, isLeafletLoaded]); // Rerun effect if locations or leaflet loaded status changes
 
   // Cleanup function to remove map instance when component unmounts
   useEffect(() => {
@@ -102,8 +115,8 @@ export function LocationMap({ locations }: LocationMapProps) {
   }, []);
 
 
-  if (!clientRender) {
-    return <div className="flex-grow flex justify-center items-center h-full w-full rounded-lg shadow-md bg-muted"><LoadingSpinner size={32} /><p className="ml-2">Loading map...</p></div>;
+  if (!isLeafletLoaded) {
+    return <div className="flex-grow flex justify-center items-center h-full w-full rounded-lg shadow-md bg-muted"><LoadingSpinner size={32} /><p className="ml-2">Loading map components...</p></div>;
   }
 
   // The div for the map container. Leaflet will attach the map to this div.

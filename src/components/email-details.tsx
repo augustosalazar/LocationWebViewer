@@ -1,7 +1,7 @@
+
 'use client';
 
 import { useState, useEffect, type SetStateAction } from 'react';
-import dynamic from 'next/dynamic';
 import { getLocationsByEmail, type LocationData } from '@/services/location-service';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,11 +11,7 @@ import { ErrorDisplay } from '@/components/error-display';
 import { DatePicker } from '@/components/date-picker';
 import { ArrowLeft, MapPin, ListFilter, CalendarDays } from 'lucide-react';
 import { format, isSameDay } from 'date-fns';
-
-const LocationMap = dynamic(() => import('@/components/location-map').then(mod => mod.LocationMap), {
-  ssr: false,
-  loading: () => <div className="flex justify-center items-center h-96 bg-muted rounded-lg shadow-inner"><LoadingSpinner size={48} /></div>,
-});
+import { LocationMap } from '@/components/location-map'; // Direct import
 
 interface EmailDetailsProps {
   email: string;
@@ -28,6 +24,12 @@ export function EmailDetails({ email, onBack }: EmailDetailsProps) {
   const [isLoadingLocations, setIsLoadingLocations] = useState(true);
   const [errorLocations, setErrorLocations] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
+  const [clientRender, setClientRender] = useState(false);
+
+  useEffect(() => {
+    setClientRender(true);
+  }, []);
+
 
   useEffect(() => {
     async function fetchLocations() {
@@ -53,7 +55,7 @@ export function EmailDetails({ email, onBack }: EmailDetailsProps) {
       }
     }
     fetchLocations();
-  }, [email]); // Removed selectedDate from dependency array to avoid re-fetching on date change
+  }, [email]);
 
   useEffect(() => {
     if (!selectedDate) {
@@ -155,8 +157,8 @@ export function EmailDetails({ email, onBack }: EmailDetailsProps) {
                     </CardTitle>
                     <CardDescription>Locations visualized on OpenStreetMap.</CardDescription>
                 </CardHeader>
-                <CardContent className="flex-grow flex">
-                  <LocationMap locations={filteredLocations} />
+                <CardContent className="flex-grow flex p-0"> {/* Modified to p-0 and flex to allow map to fill */}
+                {clientRender ? <LocationMap locations={filteredLocations} /> : <div className="flex-grow flex justify-center items-center h-full w-full rounded-lg shadow-md bg-muted"><LoadingSpinner size={32} /><p className="ml-2">Loading map...</p></div>}
                 </CardContent>
               </Card>
             </>

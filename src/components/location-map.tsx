@@ -2,10 +2,10 @@
 'use client';
 
 import type { LocationData } from '@/services/location-service';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { LoadingSpinner } from './loading-spinner';
 
 // Fix for default icon issue with Leaflet and Webpack
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -21,91 +21,99 @@ interface LocationMapProps {
   locations: LocationData[];
 }
 
-// Component to recenter map when locations change
-function RecenterAutomatically({ locations }: { locations: LocationData[] }) {
-  const map = useMap();
-  useEffect(() => {
-    if (locations.length > 0) {
-      const latitudes = locations.map(loc => loc.latitude);
-      const longitudes = locations.map(loc => loc.longitude);
-      
-      // Filter out invalid coordinates before calculating bounds
-      const validLatitudes = latitudes.filter(lat => lat !== null && lat !== undefined && !isNaN(lat));
-      const validLongitudes = longitudes.filter(lng => lng !== null && lng !== undefined && !isNaN(lng));
-
-      if (validLatitudes.length === 0 || validLongitudes.length === 0) {
-        // Fallback if no valid coordinates, maybe center on a default location or do nothing
-        map.setView([0,0], 2); // Example: center on 0,0 with low zoom
-        return;
-      }
-      
-      const minLat = Math.min(...validLatitudes);
-      const maxLat = Math.max(...validLatitudes);
-      const minLng = Math.min(...validLongitudes);
-      const maxLng = Math.max(...validLongitudes);
-      
-      if (locations.length === 1 && validLatitudes.length === 1 && validLongitudes.length === 1) {
-        map.setView([validLatitudes[0], validLongitudes[0]], 13);
-      } else if (minLat !== Infinity && maxLat !== -Infinity && minLng !== Infinity && maxLng !== -Infinity) {
-         map.fitBounds([
-          [minLat, minLng],
-          [maxLat, maxLng],
-        ], { padding: [50, 50] }); 
-      }
-    } else {
-        // Default view if no locations
-        map.setView([20, 0], 2); // Center on a generic world view
-    }
-  }, [locations, map]);
-  return null;
-}
-
-
 export function LocationMap({ locations }: LocationMapProps) {
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<L.Marker[]>([]);
   const [clientRender, setClientRender] = useState(false);
 
   useEffect(() => {
     setClientRender(true);
   }, []);
 
+  useEffect(() => {
+    if (!clientRender || !mapRef.current) return;
+
+    // Initialize map if it hasn't been initialized yet
+    if (!mapInstanceRef.current) {
+      mapInstanceRef.current = L.map(mapRef.current, {
+        // Adjust map options if needed, e.g., scrollWheelZoom: false
+      });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      }).addTo(mapInstanceRef.current);
+    }
+
+    const map = mapInstanceRef.current;
+
+    // Clear existing markers
+    markersRef.current.forEach(marker => map.removeLayer(marker));
+    markersRef.current = [];
+
+    const validLocations = locations.filter(loc => loc.latitude != null && loc.longitude != null);
+
+    if (validLocations.length > 0) {
+      validLocations.forEach(location => {
+        const marker = L.marker([location.latitude, location.longitude])
+          .addTo(map)
+          .bindPopup(`Lat: ${location.latitude.toFixed(4)}, Lng: ${location.longitude.toFixed(4)} <br />Time: ${new Date(location.timestamp).toLocaleString()}`);
+        markersRef.current.push(marker);
+      });
+
+      if (validLocations.length === 1) {
+        map.setView([validLocations[0].latitude, validLocations[0].longitude], 13);
+      } else {
+        const latitudes = validLocations.map(loc => loc.latitude);
+        const longitudes = validLocations.map(loc => loc.longitude);
+        const minLat = Math.min(...latitudes);
+        const maxLat = Math.max(...latitudes);
+        const minLng = Math.min(...longitudes);
+        const maxLng = Math.max(...longitudes);
+        
+        if (minLat !== Infinity && maxLat !== -Infinity && minLng !== Infinity && maxLng !== -Infinity) {
+          map.fitBounds([
+            [minLat, minLng],
+            [maxLat, maxLng],
+          ], { padding: [50, 50] });
+        } else if (validLocations.length > 0) { // Fallback if bounds are weird but locations exist
+           map.setView([validLocations[0].latitude, validLocations[0].longitude], 5);
+        }
+      }
+    } else {
+      // Default view if no locations
+      map.setView([20, 0], 2);
+    }
+
+    // Ensure map size is updated if container size changed
+    map.invalidateSize();
+
+
+  }, [locations, clientRender]); // Rerun effect if locations or clientRender status changes
+
+  // Cleanup function to remove map instance when component unmounts
+  useEffect(() => {
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+      markersRef.current = [];
+    };
+  }, []);
+
+
   if (!clientRender) {
-    return <div className="flex-grow flex justify-center items-center h-full w-full rounded-lg shadow-md bg-muted"><p>Loading map...</p></div>;
+    return <div className="flex-grow flex justify-center items-center h-full w-full rounded-lg shadow-md bg-muted"><LoadingSpinner size={32} /><p className="ml-2">Loading map...</p></div>;
   }
 
-  if (!locations || locations.length === 0) {
-    // Handled by parent, but good to keep a fallback
-    return <div className="flex-grow flex justify-center items-center h-full w-full rounded-lg shadow-md bg-muted"><p className="text-muted-foreground">No locations to display on the map.</p></div>;
-  }
-
-  const centerLat = locations[0]?.latitude ?? 0; // Fallback to 0 if first location is somehow invalid
-  const centerLng = locations[0]?.longitude ?? 0;
-  
-  // Using a simpler key as the entire EmailDetails component re-mounts or major state changes handle re-renders.
-  // The key's main purpose here is to ensure Leaflet initializes correctly if the container was hidden.
-  const mapKey = `map-${locations.length}-${locations[0]?.id || 'empty'}`;
-
-
+  // The div for the map container. Leaflet will attach the map to this div.
+  // Ensure `flex-grow` allows it to take available space in its parent CardContent.
   return (
-    <MapContainer 
-        key={mapKey} 
-        center={[centerLat, centerLng]} 
-        zoom={locations.length === 1 ? 13 : 5} 
-        style={{ height: '100%', width: '100%', borderRadius: '0.5rem', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.06)' }}
-        className="flex-grow"
-    >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
-      {locations.filter(loc => loc.latitude != null && loc.longitude != null).map(location => (
-        <Marker key={location.id} position={[location.latitude, location.longitude]}>
-          <Popup>
-            Lat: {location.latitude.toFixed(4)}, Lng: {location.longitude.toFixed(4)} <br />
-            Time: {new Date(location.timestamp).toLocaleString()}
-          </Popup>
-        </Marker>
-      ))}
-      <RecenterAutomatically locations={locations} />
-    </MapContainer>
+    <div 
+      ref={mapRef} 
+      style={{ height: '100%', width: '100%', borderRadius: '0.5rem', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.06)' }} 
+      className="flex-grow" 
+      aria-label="Location map"
+    />
   );
 }

@@ -1,21 +1,25 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type SetStateAction } from 'react';
 import { getEmails, getLocationsByEmail, type LocationData } from '@/services/location-service';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/loading-spinner';
 import { EmailList } from '@/components/email-list';
 import { LocationCard } from '@/components/location-card';
 import { ErrorDisplay } from '@/components/error-display';
+import { DatePicker } from '@/components/date-picker';
 import { Mail, MapPin } from 'lucide-react';
+import { format, isSameDay } from 'date-fns';
 
 export default function HomePage() {
   const [emails, setEmails] = useState<string[]>([]);
   const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
-  const [locations, setLocations] = useState<LocationData[]>([]);
+  const [locations, setLocations] = useState<LocationData[]>([]); // Raw locations for selected email
+  const [filteredLocations, setFilteredLocations] = useState<LocationData[]>([]); // Locations after date filter
   const [isLoadingEmails, setIsLoadingEmails] = useState(true);
   const [isLoadingLocations, setIsLoadingLocations] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
 
   useEffect(() => {
     async function fetchEmails() {
@@ -36,10 +40,12 @@ export default function HomePage() {
 
   const handleSelectEmail = async (email: string) => {
     setSelectedEmail(email);
+    // setSelectedDate(undefined); // Optionally reset date when email changes
     try {
       setIsLoadingLocations(true);
       setError(null);
-      setLocations([]); // Clear previous locations
+      setLocations([]); 
+      setFilteredLocations([]);
       const fetchedLocations = await getLocationsByEmail(email);
       setLocations(fetchedLocations);
     } catch (err) {
@@ -48,6 +54,21 @@ export default function HomePage() {
     } finally {
       setIsLoadingLocations(false);
     }
+  };
+
+  useEffect(() => {
+    if (!selectedDate) {
+      setFilteredLocations(locations);
+    } else {
+      const newFiltered = locations.filter(location => 
+        isSameDay(new Date(location.timestamp), selectedDate)
+      );
+      setFilteredLocations(newFiltered);
+    }
+  }, [locations, selectedDate]);
+
+  const handleDateChange = (date: SetStateAction<Date | undefined>) => {
+    setSelectedDate(date);
   };
 
   return (
@@ -79,19 +100,32 @@ export default function HomePage() {
         {selectedEmail && (
           <Card className="shadow-xl">
             <CardHeader>
-              <CardTitle className="flex items-center">
-                <MapPin className="mr-2 h-5 w-5 text-primary" />
-                Locations for {selectedEmail}
-              </CardTitle>
-              <CardDescription>Showing recorded locations for the selected email.</CardDescription>
+              <div className="flex justify-between items-start sm:items-center flex-col sm:flex-row gap-2">
+                <CardTitle className="flex items-center">
+                  <MapPin className="mr-2 h-5 w-5 text-primary" />
+                  Locations for {selectedEmail}
+                </CardTitle>
+                <DatePicker date={selectedDate} setDate={handleDateChange} />
+              </div>
+              <CardDescription>
+                Showing recorded locations for the selected email
+                {selectedDate ? ` on ${format(selectedDate, 'PPP')}` : ''}.
+                {!selectedDate && locations.length > 0 && filteredLocations.length === 0 && locations.length !== 0 && ' (No locations for selected date).'}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {isLoadingLocations && <LoadingSpinner size={32} />}
               {error && !isLoadingLocations && <ErrorDisplay message={error} />}
-              {!isLoadingLocations && !error && locations.length === 0 && <p>No locations found for this email.</p>}
-              {!isLoadingLocations && locations.length > 0 && (
+              {!isLoadingLocations && !error && filteredLocations.length === 0 && selectedEmail && (
+                <p>
+                  {selectedDate 
+                    ? `No locations found for this email on ${format(selectedDate, 'PPP')}.` 
+                    : 'No locations found for this email.'}
+                </p>
+              )}
+              {!isLoadingLocations && filteredLocations.length > 0 && (
                 <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-                  {locations.map((location) => (
+                  {filteredLocations.map((location) => (
                     <LocationCard key={location.id} location={location} />
                   ))}
                 </div>

@@ -1,8 +1,8 @@
 import type {Metadata} from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
+import 'leaflet/dist/leaflet.css'; // Import Leaflet CSS
 import { Toaster } from '@/components/ui/toaster';
-import { AppHeader } from '@/components/app-header';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -25,10 +25,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <AppHeader />
-        <main className="container mx-auto p-4">
+    <html lang="en" className="h-full">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased h-full bg-background text-foreground`}>
+        {/* AppHeader removed to allow more screen space for EmailDetails */}
+        <main className="h-full">
           {children}
         </main>
         <Toaster />

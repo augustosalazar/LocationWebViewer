@@ -28,19 +28,33 @@ function RecenterAutomatically({ locations }: { locations: LocationData[] }) {
     if (locations.length > 0) {
       const latitudes = locations.map(loc => loc.latitude);
       const longitudes = locations.map(loc => loc.longitude);
-      const minLat = Math.min(...latitudes);
-      const maxLat = Math.max(...latitudes);
-      const minLng = Math.min(...longitudes);
-      const maxLng = Math.max(...longitudes);
       
-      if (locations.length === 1) {
-        map.setView([locations[0].latitude, locations[0].longitude], 13);
+      // Filter out invalid coordinates before calculating bounds
+      const validLatitudes = latitudes.filter(lat => lat !== null && lat !== undefined && !isNaN(lat));
+      const validLongitudes = longitudes.filter(lng => lng !== null && lng !== undefined && !isNaN(lng));
+
+      if (validLatitudes.length === 0 || validLongitudes.length === 0) {
+        // Fallback if no valid coordinates, maybe center on a default location or do nothing
+        map.setView([0,0], 2); // Example: center on 0,0 with low zoom
+        return;
+      }
+      
+      const minLat = Math.min(...validLatitudes);
+      const maxLat = Math.max(...validLatitudes);
+      const minLng = Math.min(...validLongitudes);
+      const maxLng = Math.max(...validLongitudes);
+      
+      if (locations.length === 1 && validLatitudes.length === 1 && validLongitudes.length === 1) {
+        map.setView([validLatitudes[0], validLongitudes[0]], 13);
       } else if (minLat !== Infinity && maxLat !== -Infinity && minLng !== Infinity && maxLng !== -Infinity) {
          map.fitBounds([
           [minLat, minLng],
           [maxLat, maxLng],
-        ], { padding: [50, 50] }); // Add padding to ensure markers are not on the edge
+        ], { padding: [50, 50] }); 
       }
+    } else {
+        // Default view if no locations
+        map.setView([20, 0], 2); // Center on a generic world view
     }
   }, [locations, map]);
   return null;
@@ -55,30 +69,35 @@ export function LocationMap({ locations }: LocationMapProps) {
   }, []);
 
   if (!clientRender) {
-    return <div className="flex justify-center items-center h-[400px] w-full rounded-lg shadow-md bg-muted"><p>Loading map...</p></div>;
+    return <div className="flex-grow flex justify-center items-center h-full w-full rounded-lg shadow-md bg-muted"><p>Loading map...</p></div>;
   }
 
   if (!locations || locations.length === 0) {
-    return <p className="text-muted-foreground">No locations to display on the map.</p>;
+    // Handled by parent, but good to keep a fallback
+    return <div className="flex-grow flex justify-center items-center h-full w-full rounded-lg shadow-md bg-muted"><p className="text-muted-foreground">No locations to display on the map.</p></div>;
   }
 
-  // Calculate a center point for the map. If only one location, use it. Otherwise, use the first location.
-  const centerLat = locations[0].latitude;
-  const centerLng = locations[0].longitude;
+  const centerLat = locations[0]?.latitude ?? 0; // Fallback to 0 if first location is somehow invalid
+  const centerLng = locations[0]?.longitude ?? 0;
   
-  // Adding a key to MapContainer that changes when locations change forces a re-render of the map.
-  // This is necessary because Leaflet doesn't always react well to prop changes after initialization.
-  // Using JSON.stringify for a simple, stable key based on location IDs or a hash of coordinates.
-  const mapKey = locations.map(loc => loc.id).join(',') + `-${locations.length}`;
+  // Using a simpler key as the entire EmailDetails component re-mounts or major state changes handle re-renders.
+  // The key's main purpose here is to ensure Leaflet initializes correctly if the container was hidden.
+  const mapKey = `map-${locations.length}-${locations[0]?.id || 'empty'}`;
 
 
   return (
-    <MapContainer key={mapKey} center={[centerLat, centerLng]} zoom={locations.length === 1 ? 13 : 5} style={{ height: '400px', width: '100%', borderRadius: '0.5rem', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+    <MapContainer 
+        key={mapKey} 
+        center={[centerLat, centerLng]} 
+        zoom={locations.length === 1 ? 13 : 5} 
+        style={{ height: '100%', width: '100%', borderRadius: '0.5rem', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.06)' }}
+        className="flex-grow"
+    >
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      {locations.map(location => (
+      {locations.filter(loc => loc.latitude != null && loc.longitude != null).map(location => (
         <Marker key={location.id} position={[location.latitude, location.longitude]}>
           <Popup>
             Lat: {location.latitude.toFixed(4)}, Lng: {location.longitude.toFixed(4)} <br />
@@ -90,5 +109,3 @@ export function LocationMap({ locations }: LocationMapProps) {
     </MapContainer>
   );
 }
-
-

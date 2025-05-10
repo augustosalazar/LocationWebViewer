@@ -1,13 +1,15 @@
+
 'use client';
 
-import type { Mail } from 'lucide-react';
+import type { LucideProps } from 'lucide-react'; // Import LucideProps for generic icon type
 import { Button } from '@/components/ui/button';
+import type React from 'react';
 
 interface EmailListProps {
   emails: string[];
   selectedEmail: string | null;
   onSelectEmail: (email: string) => void;
-  IconComponent: typeof Mail; // To avoid direct import of lucide-react here
+  IconComponent: React.ComponentType<LucideProps>; // Use a more generic type for Lucide icons
 }
 
 export function EmailList({ emails, selectedEmail, onSelectEmail, IconComponent }: EmailListProps) {

@@ -1,35 +1,38 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getEmails } from '@/services/location-service';
+import { getUsers, type UserData } from '@/services/location-service';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/loading-spinner';
 import { EmailList } from '@/components/email-list';
 import { EmailDetails } from '@/components/email-details';
 import { ErrorDisplay } from '@/components/error-display';
-import { Mail, LayoutDashboard } from 'lucide-react';
+import { Users, LayoutDashboard } from 'lucide-react'; // Changed Mail to Users icon
 
 export default function HomePage() {
-  const [emails, setEmails] = useState<string[]>([]);
+  const [users, setUsers] = useState<UserData[]>([]);
+  const [userEmails, setUserEmails] = useState<string[]>([]);
   const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
-  const [isLoadingEmails, setIsLoadingEmails] = useState(true);
-  const [errorEmails, setErrorEmails] = useState<string | null>(null);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+  const [errorUsers, setErrorUsers] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchEmails() {
+    async function fetchUsersData() {
       try {
-        setIsLoadingEmails(true);
-        setErrorEmails(null);
-        const fetchedEmails = await getEmails();
-        setEmails(fetchedEmails);
+        setIsLoadingUsers(true);
+        setErrorUsers(null);
+        const fetchedUsers = await getUsers();
+        setUsers(fetchedUsers);
+        setUserEmails(fetchedUsers.map(user => user.email));
       } catch (err) {
-        console.error('Failed to fetch emails:', err);
-        setErrorEmails('Failed to load email list. Please try again later.');
+        console.error('Failed to fetch users:', err);
+        setErrorUsers('Failed to load user list. Please try again later.');
       } finally {
-        setIsLoadingEmails(false);
+        setIsLoadingUsers(false);
       }
     }
-    fetchEmails();
+    fetchUsersData();
   }, []);
 
   const handleSelectEmail = (email: string) => {
@@ -49,21 +52,21 @@ export default function HomePage() {
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader>
           <CardTitle className="flex items-center">
-            <Mail className="mr-2 h-5 w-5 text-primary" />
-            Select an Email
+            <Users className="mr-2 h-5 w-5 text-primary" /> {/* Changed icon */}
+            Select a User
           </CardTitle>
-          <CardDescription>Choose an email address to view its associated location data.</CardDescription>
+          <CardDescription>Choose a user's email address to view their associated location data.</CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoadingEmails && <LoadingSpinner />}
-          {errorEmails && !emails.length && <ErrorDisplay message={errorEmails} />}
-          {!isLoadingEmails && !errorEmails && emails.length === 0 && <p className="text-center text-muted-foreground">No emails found.</p>}
-          {!isLoadingEmails && emails.length > 0 && (
+          {isLoadingUsers && <LoadingSpinner />}
+          {errorUsers && !userEmails.length && <ErrorDisplay message={errorUsers} />}
+          {!isLoadingUsers && !errorUsers && userEmails.length === 0 && <p className="text-center text-muted-foreground">No users found.</p>}
+          {!isLoadingUsers && userEmails.length > 0 && (
             <EmailList
-              emails={emails}
-              selectedEmail={selectedEmail} // This will always be null here, but kept for prop consistency
+              emails={userEmails}
+              selectedEmail={selectedEmail} 
               onSelectEmail={handleSelectEmail}
-              IconComponent={Mail}
+              IconComponent={Users} // Changed icon prop
             />
           )}
         </CardContent>
